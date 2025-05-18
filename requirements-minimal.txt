@@ -1,0 +1,8 @@
+grpcio==1.71.0
+grpcio-tools==1.71.0
+python-dotenv==1.1.0
+groq==0.24.0
+langchain==0.3.25
+langchain-groq==0.3.2
+pypdf==5.4.0
+chromadb==0.6.3
