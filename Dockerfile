@@ -14,7 +14,7 @@ ENV TRANSFORMERS_CACHE=/tmp/transformers_cache
 ENV TORCH_HOME=/tmp/torch_cache
 
 # Copy requirements first to leverage Docker cache
-COPY requirements-minimal.txt requirements.txt
+COPY requirements.txt requirements.txt
 
 # Install Python packages with memory optimizations
 RUN pip install --no-cache-dir -r requirements.txt && \
