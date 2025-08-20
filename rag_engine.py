@@ -9,6 +9,7 @@ import os
 from dotenv import load_dotenv
 from langchain_community.retrievers import BM25Retriever
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+import shutil
 
 # from langchain.retrievers import BM25Retriever, ContextualCompressionRetriever
 from langchain.retrievers.multi_query import MultiQueryRetriever
@@ -22,7 +23,7 @@ class RAGEngine:
     def __init__(
         self,
         groq_api_key: str,
-        persist_directory: str = "./chroma_db"
+        persist_directory: str = None
     ):
         """
         Initialize the RAG Engine with ChromaDB.
@@ -33,6 +34,15 @@ class RAGEngine:
         """
         self.groq_api_key = groq_api_key
         
+        # Use /tmp for Cloud Run compatibility, or provided directory
+        if persist_directory is None:
+            persist_directory = "/tmp/chroma_db"
+        
+        self.persist_directory = persist_directory
+        
+        # Create persist directory if it doesn't exist
+        os.makedirs(persist_directory, exist_ok=True)
+        
         # Improved embeddings model for better semantic understanding
         self.embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L12-v2",
@@ -40,11 +50,21 @@ class RAGEngine:
         )
         
         # Initialize vector store with metadata filtering capability
-        self.vector_store = Chroma(
-            embedding_function=self.embeddings,
-            persist_directory=persist_directory,
-            collection_metadata={"hnsw:space": "cosine"}
-        )
+        try:
+            self.vector_store = Chroma(
+                embedding_function=self.embeddings,
+                persist_directory=persist_directory,
+                collection_metadata={"hnsw:space": "cosine"}
+            )
+        except Exception as e:
+            print(f"Error initializing ChromaDB: {e}")
+            # Ensure directory exists and try again
+            os.makedirs(persist_directory, exist_ok=True)
+            self.vector_store = Chroma(
+                embedding_function=self.embeddings,
+                persist_directory=persist_directory,
+                collection_metadata={"hnsw:space": "cosine"}
+            )
         
         # More sophisticated text splitter with better chunk management
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -89,21 +109,34 @@ class RAGEngine:
         Process documents with improved chunking and metadata.
         Clears existing database before processing new documents.
         """
-        # Clear existing database
-        print("Clearing existing database...")
         try:
-            # Delete all documents from the collection
-            self.vector_store._collection.delete(where={"$exists": "document"})
-            print("Database cleared successfully")
-        except Exception as e:
-            print(f"Error clearing database: {str(e)}")
-            # If deletion fails, try to create a new collection
+            # Use the stored persist directory path
+            persist_dir = self.persist_directory
+            
+            # Safely delete the persist directory if it exists
+            if os.path.exists(persist_dir):
+                shutil.rmtree(persist_dir)
+            
+            # Ensure the directory is created
+            os.makedirs(persist_dir, exist_ok=True)
+            
+            # Now re-instantiate Chroma with proper error handling
             self.vector_store = Chroma(
                 embedding_function=self.embeddings,
-                persist_directory=self.vector_store._persist_directory,
+                persist_directory=persist_dir,
                 collection_metadata={"hnsw:space": "cosine"}
             )
-            print("Created new database collection")
+            
+        except Exception as e:
+            print(f"Error setting up vector store: {e}")
+            # Fallback: ensure directory exists and try again
+            persist_dir = self.persist_directory
+            os.makedirs(persist_dir, exist_ok=True)
+            self.vector_store = Chroma(
+                embedding_function=self.embeddings,
+                persist_directory=persist_dir,
+                collection_metadata={"hnsw:space": "cosine"}
+            )
         
         chunks = self.text_splitter.split_documents(documents)
         

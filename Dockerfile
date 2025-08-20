@@ -21,9 +21,11 @@ RUN pip install --no-cache-dir -r requirements.txt && \
   rm -rf /root/.cache/pip/* && \
   rm -rf /root/.cache/torch/* && \
   rm -rf /root/.cache/huggingface/* && \
-  rm -rf /root/.cache/numpy/* && \
   rm -rf /root/.cache/scipy/* && \
   rm -rf /root/.cache/sklearn/*
+
+# Create tmp directory for ChromaDB (Cloud Run compatible)
+RUN mkdir -p /tmp/chroma_db && chmod 755 /tmp/chroma_db
 
 # Copy only necessary files
 COPY main.py .
